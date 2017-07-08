@@ -79,7 +79,7 @@
 #include <syslog.h>
 #include <linux/limits.h> /* for PATH_MAX */
 #include <inttypes.h>
-
+#include <time.h>
 #include "dlt_client.h"
 
 #define DLT_RECEIVE_TEXTBUFSIZE 10024  /* Size of buffer for text output */
@@ -222,46 +222,12 @@ int dlt_receive_open_output_file(DltReceiveData * dltdata)
           dlt_log(LOG_INFO, tmp);
         }
 
-        if (dltdata->part_num < 0)
-        {
-            char pattern[PATH_MAX+1];
-            pattern[PATH_MAX] = 0;
-            snprintf(pattern, PATH_MAX, "%s.*.dlt", dltdata->ovaluebase);
-            glob_t inner;
-
-            /* sort does not help here because we have to traverse the
-             * full result in any case. Remember, a sorted list would look like:
-             * foo.1.dlt
-             * foo.10.dlt
-             * foo.1000.dlt
-             * foo.11.dlt
-             */
-            if (glob(pattern, GLOB_TILDE_CHECK | GLOB_NOSORT, NULL, &inner) == 0)
-            {
-              /* search for the highest number used */
-              size_t i;
-              for (i= 0; i<inner.gl_pathc; ++i)
-              {
-                /* convert string that follows the period after the initial portion,
-                 * e.g. gt.gl_pathv[i] = foo.1.dlt -> atoi("1.dlt");
-                 */
-                int cur = atoi(&inner.gl_pathv[i][strlen(dltdata->ovaluebase)+1]);
-                if (cur > dltdata->part_num)
-                {
-                  dltdata->part_num = cur;
-                }
-              }
-            }
-            globfree(&inner);
-
-            ++dltdata->part_num;
-
-        }
-
         char filename[PATH_MAX+1];
         filename[PATH_MAX] = 0;
 
-        snprintf(filename, PATH_MAX, "%s.%i.dlt", dltdata->ovaluebase, dltdata->part_num++);
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        snprintf(filename, PATH_MAX, "%s.%06ld_%03ld.dlt", dltdata->ovaluebase, ts.tv_sec, ts.tv_nsec / 1000000);
         if (rename(dltdata->ovalue, filename) != 0)
         {
           char tmp[256];
